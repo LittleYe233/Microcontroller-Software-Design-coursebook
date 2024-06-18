@@ -1,0 +1,21 @@
+# LaTeX
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.pdf
+*.*synctex*
+*.toc
+*.xdv
+*.lof
+*.lot
+*.qst
+*.loep
+*.nav
+*.snm
+_minted*
+__pycache__
+test/
+fonts/
+*.code-workspace
