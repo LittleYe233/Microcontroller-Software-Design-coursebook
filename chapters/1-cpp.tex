@@ -1,0 +1,107 @@
+\chapter{额外内容: 配置 C++ 环境}
+目前, 单片机软件设计领域仍然是 C 语言的天下, 但是不代表我们不能用 C++ 编写单片机程序. 此处简要地讲解如何在已有工程的基础上配置 C++ 环境, 用以可能存在的特殊情况.
+
+需要注意的是, 编译 C++ 工程后生成的可执行文件可能需要更多的硬件资源, 需要谨慎考虑.
+
+\section{分析 Makefile}
+我们以上一章节的 ``LED\_R'' 工程为例, 打开工程根目录下的 \texttt{Makefile} 文件. 我们需要关注如下几个部分的内容 - 这也是我们后续章节的实验中可能需要我们自行修改的部分:
+
+\begin{minted}[firstnumber=16]{makefile}
+TARGET = LED_Key
+\end{minted}
+
+这形式上定义了工程的名字, 同时定义了生成的可执行文件的名字.
+
+\begin{minted}[firstnumber=38]{makefile}
+C_SOURCES =  \
+Core/Src/main.c \
+Core/Src/stm32f4xx_it.c \
+Core/Src/stm32f4xx_hal_msp.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c \
+Core/Src/system_stm32f4xx.c \
+Core/Src/sysmem.c \
+Core/Src/syscalls.c \
+\end{minted}
+
+这定义了哪些 C 文件将要被编译. 可以看出, 不仅是用户目录 (\texttt{Core/Src}) 下的文件, 驱动中所涉及到的文件也需要加入其中.
+
+\begin{minted}[firstnumber=76]{makefile}
+CC = $(GCC_PATH)/$(PREFIX)gcc
+\end{minted}
+
+\begin{minted}[firstnumber=81]{makefile}
+CC = $(PREFIX)gcc
+\end{minted}
+
+这定义了 C 文件的编译器.
+
+\begin{minted}[firstnumber=159]{makefile}
+OBJECTS = $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
+\end{minted}
+
+这定义了 C 文件编译后生成的 *.o 文件的列表.
+
+\begin{minted}[firstnumber=160]{makefile}
+vpath %.c $(sort $(dir $(C_SOURCES)))
+\end{minted}
+
+这定义了 C 文件的编译所需要寻找的目录, 设置为 \texttt{C\_SOURCES} 列表中的文件的所在目录.
+
+\begin{minted}[firstnumber=167]{makefile}
+$(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR) 
+    $(CC) -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) $< -o $@
+\end{minted}
+
+这定义了由 C 文件编译而来的 *.o 文件的真正的编译命令.
+
+接下来我们将增改一些部分, 以让 C++ 文件也可以通过编译.
+
+\section{修改 Makefile}
+我们以将 \texttt{main.c} 文件更改为 \texttt{main.cpp} 为例. 因为其不再是 C 文件, 故需要将其从 \texttt{C\_SOURCES} 中删去, 并添加到新的变量 \texttt{CXX\_SOURCES} 中:
+
+\begin{minted}{makefile}
+CXX_SOURCES = \
+Core/Src/main.cpp \
+\end{minted}
+
+随后添加 C++ 文件的编译器路径:
+
+\begin{minted}{makefile}
+ifdef GCC_PATH
+CX = $(GCC_PATH)/$(PREFIX)g++
+else
+CX = $(PREFIX)g++
+endif
+\end{minted}
+
+然后为 C++ 文件添加 \texttt{OBJECTS} 和 \texttt{vpath}:
+
+\begin{minted}{makefile}
+OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(CXX_SOURCES:.cpp=_cpp.o)))
+vpath %.cpp $(sort $(dir $(CXX_SOURCES)))
+\end{minted}
+
+注意这里 \texttt{OBJECTS} 一行后面要将 C++ 扩展名 \texttt{.cpp} 替换为 \texttt{\_cpp.o} 而不是 \texttt{.o}, 这是为了避免编译时需要一个 \texttt{*.o} 文件时不知道应该编译对应的 C 文件还是 C++ 文件. 当然为了误命名, 也可以适当修改 \texttt{\_cpp} 为其他的后缀.
+
+最后添加真正的编译命令:
+
+\begin{minted}{makefile}
+$(BUILD_DIR)/%_cpp.o: %.cpp Makefile | $(BUILD_DIR)
+    $(CX) -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.cpp=.lst)) $< -o $@
+\end{minted}
+
+保存 Makefile 文件并执行 \texttt{make} 命令编译, 如若成功编译, 则表示 C++ 环境配置成功.
