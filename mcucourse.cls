@@ -1,6 +1,7 @@
 \LoadClass[fontset=custom, oneside]{ctexbook}
 
 \RequirePackage{booktabs}
+\usepackage[shortlabels]{enumitem}
 \RequirePackage{fancyhdr}
 \RequirePackage{float}
 \RequirePackage[
@@ -56,3 +57,5 @@
 % Resolve fancyhdr head height too small
 % See: https://tex.stackexchange.com/a/327298
 \setlength{\headheight}{13pt}
+
+\setlist{nosep}

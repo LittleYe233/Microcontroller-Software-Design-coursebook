@@ -1,2 +1,224 @@
 \part{简单 GPIO 输出}
 \chapter{实验: 循环点亮 LED}
+这是一个相对来说简单的实验. 我们需要通过编程控制开发板上 GPIO 外设来控制 LED 灯的亮灭.
+
+\section{GPIO 简介}
+GPIO (General Purpose Input/Output), 即通用输入输出, 是一种用于嵌入式系统和单板计算机的通用接口技术. 它提供了一个灵活的, 可编程的引脚集合, 使得设备可以与各种外部硬件交互, 如传感器, 显示器, 按键, LED, 继电器等. STM32 芯片的 GPIO 被分为很多组, 每组有至多 16 个引脚. 所有的 GPIO 引脚都有基本的输入输出功能. 最基本的输出功能是由 STM32 控制引脚输出高低电平, 实现开关控制; 最基本的输入功能是检测外部输入电平.
+
+\section{实验目标}
+使开发板上的 LED 灯依次亮红, 黄, 绿, 青, 蓝, 紫, 白光, 后熄灭, 循环往复.
+
+\section{硬件设计}
+硬件设计部分主要需要查看 LED 的原理图. 这在前文已有提及 (图 \ref{fig:1-newproj led}), 在此略过. 观察得知, 开发板上的 LED 灯是由三原色 (红, 绿, 蓝) 的小灯组成. 如果只亮其中一盏灯, 则可以发出红, 绿, 蓝三种颜色的光. 如果亮其中两盏灯, 则可以发出黄 (红 + 绿), 青 (绿 + 蓝), 紫 (红 + 蓝) 三种颜色的光. 如果三盏灯都亮, 则可以发出白光. 三种原色的 LED 灯分别接 PF6, PF7, PF8 引脚. 那么控制这三个引脚的电平就可以控制 LED 灯发出不同颜色的光.
+
+观察电路图可知, LED 灯对应的引脚在高电平时为熄灭状态, 低电平时为点亮状态. 这决定了我们将如何控制 GPIO 的输出.
+
+\section{软件设计}
+\subsection{编程要点}
+这个工程的主要编程要点如下:
+\begin{enumerate}[(1)]
+    \item 使能 GPIO 端口时钟;
+    \item 初始化 GPIO 引脚;
+    \item 控制 GPIO 引脚的输出电平.
+\end{enumerate}
+
+其中 (1)-(2) 部分已经在 STM32CubeMX 新建的工程和空白工程 (见下一节) 中定义并调用好, 参见 \texttt{MX\_GPIO\_Init()} 函数:
+
+\begin{minted}{c}
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOF_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOF, LED_R_Pin|LED_G_Pin|LED_B_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pins : LED_R_Pin LED_G_Pin LED_B_Pin */
+  GPIO_InitStruct.Pin = LED_R_Pin|LED_G_Pin|LED_B_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; // 推挽输出
+  GPIO_InitStruct.Pull = GPIO_NOPULL; // 不上拉也不下拉
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; // 低速
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
+}
+\end{minted}
+
+在 STM32CubeMX 新建工程或空白工程未给出的时候, 我们就需要自己初始化相关的引脚. 对于后续章节提到的其他外设, 基本也是遵循类似的初始化方式.
+
+接着是 (3) 控制 GPIO 引脚的输出电平. 这里需要用到一个上文提及到的函数: \texttt{HAL\_GPIO\_WritePin()}. 这个函数的原型和注释如下:
+
+\begin{minted}{c}
+/**
+  * @brief  Sets or clears the selected data port bit.
+  *
+  * @note   This function uses GPIOx_BSRR register to allow atomic read/modify
+  *         accesses. In this way, there is no risk of an IRQ occurring between
+  *         the read and the modify access.
+  *
+  * @param  GPIOx where x can be (A..K) to select the GPIO peripheral for STM32F429X device or
+  *                      x can be (A..I) to select the GPIO peripheral for STM32F40XX and STM32F427X devices.
+  * @param  GPIO_Pin specifies the port bit to be written.
+  *          This parameter can be one of GPIO_PIN_x where x can be (0..15).
+  * @param  PinState specifies the value to be written to the selected bit.
+  *          This parameter can be one of the GPIO_PinState enum values:
+  *            @arg GPIO_PIN_RESET: to clear the port pin
+  *            @arg GPIO_PIN_SET: to set the port pin
+  * @retval None
+  */
+void HAL_GPIO_WritePin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin, GPIO_PinState PinState);
+\end{minted}
+
+简单来说是提供 GPIO 的端口 (\texttt{GPIOA} 到 \texttt{GPIOG}, 都是预先定义好的宏) 和引脚 (\texttt{GPIO\_PIN\_1}, 等), 再给定 GPIO 口的状态 (\texttt{GPIO\_PIN\_RESET} 低电平, \texttt{GPIO\_PIN\_SET} 高电平), 就可以控制这个 GPIO 引脚的电平.
+
+对于本次的工程, 我们还需要一个延时函数, 以控制每种颜色的灯点亮的时长:
+
+\begin{minted}{c}
+/**
+  * @brief This function provides minimum delay (in milliseconds) based 
+  *        on variable incremented.
+  * @note In the default implementation , SysTick timer is the source of time base.
+  *       It is used to generate interrupts at regular time intervals where uwTick
+  *       is incremented.
+  * @note This function is declared as __weak to be overwritten in case of other
+  *       implementations in user file.
+  * @param Delay specifies the delay time length, in milliseconds.
+  * @retval None
+  */
+__weak void HAL_Delay(uint32_t Delay);
+\end{minted}
+
+这个函数是给定一个 32 位无符号整数, 使程序在以此为毫秒数的时间内产生时延.
+
+\section{实验流程}
+本次实验, 我们将依次演示通过 STM32CubeMX 新建工程和使用我们提供的空白工程两种方式编写代码, 同时将演示如何在每个工程下配置 VS Code. 这两种方式本质上没有区别, 只是空白工程除了建立在 STM32CubeMX 新建的工程基础上之外, 还增改了一些本课程无需过多关注的必要性代码. 若仅为学习考虑, 可以直接使用提供的空白工程编程. STM32CubeMX 通常为我们做了一些初始化工作, 而这些工作本身并不难, 外加上 STM32CubeMX 本身在生成代码上存在一些限制 (例如并未完全按照 User label 命名接口, 以及存在未被初始化的接口), 因此我们更多地关注提供的空白工程即可.
+
+\subsection{从 STM32CubeMX 新建工程的额外步骤}
+\subsubsection{新建工程}
+新建工程, 选择 CPU 型号后, 在 ``Pinout \& Configuration'' 选项卡下, 依次单击 PF6, PF7, PF8 引脚, 将其设置为 ``GPIO\_Output''. 进入 System view 页面, 设置这三个引脚的 GPIO output level 为 High (LED 默认为熄灭状态), User label 依次设置为 ``LED\_R'', ``LED\_G'', ``LED\_B''. 最后保存工程 (假定工程名为 ``LED\_RGB'') 即可, 记得将 ``Toolchain / IDE'' 设置为 ``Makefile''.
+
+\subsubsection{创建 VS Code 工作区文件}
+进入工程根目录, 新建一个与工程名同名的 VS Code 工作区文件 \texttt{LED\_RGB.code-workspace}. 编辑该文件, 如下所示:
+
+\begin{minted}{json}
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.defaultLanguage": "c",
+    "editor.tabSize": 2
+  }
+}
+\end{minted}
+
+之后的步骤, 参考第 \ref{2-led-rgb workspace} 节及其之后的内容.
+
+\subsection{使用空白工程}
+\subsubsection{下载空白工程}
+首先, 我们需要从 GitHub 下载空白工程. 选定一个文件夹, 并用终端定位到该文件夹处, 执行以下的命令:
+\begin{minted}{bash}
+git clone https://github.com/LittleYe233/Microcontroller-Software-Design-EmptyProj/tree/main
+cd Microcontroller-Software-Design-EmptyProj
+\end{minted}
+
+这将克隆本课程提供的所有空白工程. 因为空白工程仍然在不断制作中, 在每次使用其中的工程前, 记得执行
+
+\begin{minted}{bash}
+git pull origin main
+\end{minted}
+
+\subsubsection{用 VS Code 启动工作区} \label{2-led-rgb workspace}
+启动 VS Code, 点击左上角菜单 ``File-Open Workspace from file ...'', 定位到空白工程下的工作区文件, 启动工作区.
+
+\subsubsection{配置 clangd 插件}
+空白工程都是可以正常编译的. 按照前文所述的方法启动 clangd 插件. 在终端定位到空白工程的根目录, 执行
+
+\begin{minted}{bash}
+bear -- make
+\end{minted}
+
+这将在工程根目录生成一个 \texttt{compile\_commands.json} 的文件, 用来指示 clangd 插件如何编译并语法高亮不同的文件. 等待上述程序编译完成, 即可完成 clangd 插件的配置.
+
+\subsubsection{编写代码}
+我们只需要在主函数的循环体内添加代码, 因为单片机最基本的时钟设置和 GPIO 口配置已经写好:
+
+\begin{minted}{c}
+  while (1)
+  {
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+    // Red
+    HAL_GPIO_WritePin(LED_R_GPIO_Port, LED_R_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_SET);
+    HAL_Delay(500);
+    
+    // Yellow
+    HAL_GPIO_WritePin(LED_R_GPIO_Port, LED_R_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_SET);
+    HAL_Delay(500);
+
+    // Green
+    HAL_GPIO_WritePin(LED_R_GPIO_Port, LED_R_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_SET);
+    HAL_Delay(500);
+
+    // Cyan
+    HAL_GPIO_WritePin(LED_R_GPIO_Port, LED_R_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_RESET);
+    HAL_Delay(500);
+
+    // Blue
+    HAL_GPIO_WritePin(LED_R_GPIO_Port, LED_R_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_RESET);
+    HAL_Delay(500);
+
+    // Purple
+    HAL_GPIO_WritePin(LED_R_GPIO_Port, LED_R_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_RESET);
+    HAL_Delay(500);
+
+    // White
+    HAL_GPIO_WritePin(LED_R_GPIO_Port, LED_R_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_RESET);
+    HAL_Delay(500);
+
+    // Off
+    HAL_GPIO_WritePin(LED_R_GPIO_Port, LED_R_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, GPIO_PIN_SET);
+    HAL_Delay(500);
+  }
+\end{minted}
+
+\subsubsection{上电验证}
+按照 \ref{1-newproj test} 小节的步骤编译并烧录程序, 开发板上应当能展示不同颜色的灯光.
+
+\section{实验尝试}
+\begin{enumerate}[(1)]
+    \item 修改主函数, 使开发板亮起的灯呈现不同的模式 (更改时延, 更改颜色等);
+    \item 修改 \texttt{MX\_GPIO\_Init()} 函数中的初始化语句, 观察实验现象有无不同.
+\end{enumerate}
+
+\section{实验思考}
+LED 灯可以以不同的亮度发光吗? 若可以, 是否可以控制三原色灯来调出更多彩的颜色? (请关注后续的 PWM 章节.)

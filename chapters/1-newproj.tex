@@ -32,7 +32,7 @@
 \begin{figure}[H]
     \centering
     \includegraphics[width=.8\textwidth]{images/1-newproj-led.png}
-    \caption{STM32F407ZGT6 的 LED 模块原理图}
+    \caption{STM32F407ZGT6 的 LED 模块原理图} \label{fig:1-newproj led}
 \end{figure}
 
 在软件显示的窗口中, 在右侧的芯片示意图上找到 PF6 引脚, 或者在下方的搜索框中搜索该引脚. 找到该引脚后, 左键单击将弹出一个小菜单, 这表明我们可以对其配置的用途类型. 因为我们需要用 GPIO 控制它的电平, 所以点击 ``GPIO\_Output''. 之后这个引脚会显示绿色背景色, 表示设置成功. 具体如下图所示.
@@ -78,7 +78,7 @@ git clone --recursive https://github.com/STMicroelectronics/STM32CubeF4.git xxx 
 
 这样我们就配置好了硬件包, 之后每次新建工程都不需要修改硬件包的路径了.
 
-\section{测试工程}
+\section{测试工程} \label{1-newproj test}
 所有都配置好后, 我们点击右上角的 ``GENERATE CODE'' 生成代码. 等待代码生成完成后, 在终端进入工程所在文件夹, 在终端中执行 \texttt{make} 编译. 编译完成后, 我们应当能在 \texttt{build/<工程名>.bin} 找到编译出的文件. 接着, 用专用线将电脑 USB 和开发板串口连接, 在开发板进入 bootloader 模式后, 在终端中执行
 
 \begin{minted}{bash}
